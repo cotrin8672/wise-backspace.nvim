@@ -1,0 +1,13 @@
+.cache/
+.repro/
+.tests/
+
+doc/tags
+
+*.log
+*.tmp
+*.swp
+*.swo
+
+.DS_Store
+Thumbs.db

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wise Backspace Verify"
+  short_description: "Run repeatable verification for wise-backspace.nvim."
+  default_prompt: "Use this skill to run the full wise-backspace.nvim verification workflow."
