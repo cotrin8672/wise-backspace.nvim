@@ -28,6 +28,10 @@ local function keys_for_blank_line(col, line_length)
   return string.rep("<C-G>U<Left>", col) .. string.rep("<Del>", line_length) .. "<BS>"
 end
 
+local function keys_for_indented_text(col, indent_width)
+  return keys_for_delete(col, indent_width) .. "<BS>"
+end
+
 function M.backspace_keys()
   local _, col, line = current_line_context()
   local before_cursor = line:sub(1, col)
@@ -40,7 +44,7 @@ function M.backspace_keys()
     return keys_for_blank_line(col, #line)
   end
 
-  return keys_for_delete(col, leading_indentation_width(line))
+  return keys_for_indented_text(col, leading_indentation_width(line))
 end
 
 return M

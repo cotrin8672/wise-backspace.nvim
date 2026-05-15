@@ -16,7 +16,7 @@
 ## Behavior
 
 - Non-leading-whitespace Backspace returns native `<BS>`.
-- When the cursor's left side contains only spaces or tabs, remove the whole leading indentation, even if the cursor is inside the indentation.
+- When the cursor's left side contains only spaces or tabs, remove the whole leading indentation and join upward, even if the cursor is inside the indentation.
 - Whitespace-only lines remove all indentation and then return native line deletion to join upward.
 
 ## Code Style
