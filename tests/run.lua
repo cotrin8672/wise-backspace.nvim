@@ -2,8 +2,10 @@ local wise = require("wise-backspace")
 
 local tests = {}
 
-local function test(name, fn)
-  tests[#tests + 1] = { name = name, fn = fn }
+local current_treesitter_enabled = false
+
+local function test(name, fn, opts)
+  tests[#tests + 1] = { name = name, fn = fn, variants = not (opts and opts.variants == false) }
 end
 
 local function eq(actual, expected)
@@ -41,6 +43,15 @@ local function join_after_removing_leading(col, leading_len)
   return replace_leading(col, leading_len, "") .. "<BS>"
 end
 
+local function setup(opts)
+  opts = opts or {}
+  opts.treesitter = opts.treesitter or {
+    enabled = current_treesitter_enabled,
+    languages = { "lua" },
+  }
+  wise.setup(opts)
+end
+
 local function reset(lines)
   vim.cmd("enew!")
   vim.bo.filetype = "lua"
@@ -50,7 +61,7 @@ local function reset(lines)
   vim.bo.tabstop = 8
   vim.api.nvim_buf_set_lines(0, 0, -1, false, lines or { "" })
   vim.api.nvim_win_set_cursor(0, { 1, 0 })
-  wise.setup()
+  setup()
 end
 
 local function set_cursor(line, col)
@@ -74,12 +85,12 @@ end)
 
 test("setup is idempotent and replaces ignored filetypes", function()
   reset({ "    x" })
-  wise.setup({ ignored_filetypes = { "lua" } })
+  setup({ ignored_filetypes = { "lua" } })
   vim.bo.filetype = "markdown"
   set_cursor(1, 4)
   eq(wise.backspace(), replace_leading(4, 4, ""))
 
-  wise.setup({ ignored_filetypes = { "markdown" } })
+  setup({ ignored_filetypes = { "markdown" } })
   eq(wise.backspace(), "<BS>")
 end)
 
@@ -277,14 +288,115 @@ test("dot repeat replays smart unindent", function()
   eq(lines(), { "root", "x", "root", "y" })
 end)
 
+test("treesitter disabled keeps lua keyword blocks on the default path", function()
+  current_treesitter_enabled = false
+  reset({ "if ok then", "        value", "end" })
+  set_cursor(2, 8)
+  eq(wise.backspace(), replace_leading(8, 8, ""))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "if ok then", "value", "end" })
+end, { variants = false })
+
+test("treesitter enabled unindents lua keyword block overindent to one shiftwidth", function()
+  current_treesitter_enabled = true
+  reset({ "if ok then", "        value", "end" })
+  set_cursor(2, 8)
+  eq(wise.backspace(), replace_leading(8, 8, "    "))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "if ok then", "    value", "end" })
+end, { variants = false })
+
+test("treesitter enabled does not join lua keyword block at correct indent", function()
+  current_treesitter_enabled = true
+  reset({ "if ok then", "    value", "end" })
+  set_cursor(2, 4)
+  eq(wise.backspace(), replace_leading(4, 4, ""))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "if ok then", "value", "end" })
+end, { variants = false })
+
+test("treesitter enabled collapses empty lua if block", function()
+  current_treesitter_enabled = true
+  reset({ "if ok then", "    ", "end" })
+  set_cursor(2, 4)
+  feed("i<BS><Esc>")
+  eq(lines(), { "if ok then end" })
+end, { variants = false })
+
+test("treesitter enabled collapses empty lua function block", function()
+  current_treesitter_enabled = true
+  reset({ "local function f()", "    ", "end" })
+  set_cursor(2, 4)
+  feed("i<BS><Esc>")
+  eq(lines(), { "local function f() end" })
+end, { variants = false })
+
+test("treesitter enabled collapses empty lua do block", function()
+  current_treesitter_enabled = true
+  reset({ "do", "    ", "end" })
+  set_cursor(2, 4)
+  feed("i<BS><Esc>")
+  eq(lines(), { "do end" })
+end, { variants = false })
+
+test("treesitter enabled collapses empty lua repeat block", function()
+  current_treesitter_enabled = true
+  reset({ "repeat", "    ", "until ok" })
+  set_cursor(2, 4)
+  feed("i<BS><Esc>")
+  eq(lines(), { "repeat until ok" })
+end, { variants = false })
+
+test("treesitter enabled handles other supported lua block forms", function()
+  local cases = {
+    { { "while ok do", "        value", "end" }, { "while ok do", "    value", "end" } },
+    { { "for i = 1, 3 do", "        value", "end" }, { "for i = 1, 3 do", "    value", "end" } },
+    { { "local x = function()", "        value", "end" }, { "local x = function()", "    value", "end" } },
+  }
+
+  current_treesitter_enabled = true
+  for _, case in ipairs(cases) do
+    reset(case[1])
+    set_cursor(2, 8)
+    feed("i<BS><Esc>")
+    eq(lines(), case[2])
+  end
+end, { variants = false })
+
+test("treesitter ignores unsupported languages without errors", function()
+  current_treesitter_enabled = true
+  reset({ "if ok", "        value", "endif" })
+  vim.bo.filetype = "vim"
+  set_cursor(2, 8)
+  eq(wise.backspace(), replace_leading(8, 8, ""))
+end, { variants = false })
+
+test("treesitter configured languages fall back when lua is not enabled", function()
+  current_treesitter_enabled = true
+  reset({ "if ok then", "        value", "end" })
+  setup({ treesitter = { enabled = true, languages = { "query" } } })
+  set_cursor(2, 8)
+  eq(wise.backspace(), replace_leading(8, 8, ""))
+end, { variants = false })
+
 local failures = {}
+local passed = 0
 
 for _, case in ipairs(tests) do
-  local ok, err = xpcall(case.fn, debug.traceback)
-  if ok then
-    print("ok - " .. case.name)
-  else
-    failures[#failures + 1] = "not ok - " .. case.name .. "\n" .. err
+  local variants = case.variants and { false, true } or { current_treesitter_enabled }
+  for _, enabled in ipairs(variants) do
+    current_treesitter_enabled = enabled
+    local label = case.variants and ("%s [treesitter=%s]"):format(case.name, tostring(enabled)) or case.name
+    local ok, err = xpcall(case.fn, debug.traceback)
+    if ok then
+      passed = passed + 1
+      print("ok - " .. label)
+    else
+      failures[#failures + 1] = "not ok - " .. label .. "\n" .. err
+    end
   end
 end
 
@@ -295,5 +407,5 @@ if #failures > 0 then
   vim.cmd("cquit")
 end
 
-print(("passed %d tests"):format(#tests))
+print(("passed %d tests"):format(passed))
 vim.cmd("qa!")
