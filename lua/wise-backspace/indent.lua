@@ -5,16 +5,12 @@ local function current_line_context()
   return row, col, vim.api.nvim_get_current_line()
 end
 
-local function is_leading_spaces(text)
-  return text ~= "" and text:find("^ +$") ~= nil
-end
-
-local function contains_tab(text)
-  return text:find("\t", 1, true) ~= nil
+local function is_leading_whitespace(text)
+  return text ~= "" and text:find("^[ \t]+$") ~= nil
 end
 
 local function is_spaces_only_line(line)
-  return line:find("^ *$") ~= nil
+  return line:find("^[ \t]*$") ~= nil
 end
 
 local function keys_for_delete(count)
@@ -32,7 +28,7 @@ function M.backspace_keys()
   local _, col, line = current_line_context()
   local before_cursor = line:sub(1, col)
 
-  if not is_leading_spaces(before_cursor) or contains_tab(before_cursor) then
+  if not is_leading_whitespace(before_cursor) then
     return "<BS>"
   end
 

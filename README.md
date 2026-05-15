@@ -2,16 +2,15 @@
 
 Smart Backspace for Neovim insert mode.
 
-Current release: `1.0.0`.
+Current release: `1.0.1`.
 
-`wise-backspace.nvim` leaves ordinary text deletion to native `<BS>`, so typo fixes remain part of insert redo and work with `.`. It only takes over when everything to the left of the cursor on the current line is spaces, then removes those spaces all at once.
+`wise-backspace.nvim` leaves ordinary text deletion to native `<BS>`, so typo fixes remain part of insert redo and work with `.`. It only takes over when everything to the left of the cursor on the current line is indentation, then removes that indentation all at once.
 
 ## Behavior
 
 - On ordinary text, return native `<BS>`.
-- When the cursor's left side contains only spaces, remove all of those spaces.
-- On a whitespace-only line, remove all spaces and then join upward with native line deletion.
-- If the leading whitespace contains a tab, return native `<BS>`.
+- When the cursor's left side contains only spaces or tabs, remove all of that indentation.
+- On a whitespace-only line, remove all indentation and then join upward with native line deletion.
 - Pair deletion is intentionally out of scope. If you use `nvim-autopairs`, keep `map_bs = false`.
 
 ## Setup
@@ -25,7 +24,7 @@ With lazy.nvim:
 ```lua
 {
   "cotrin8672/wise-backspace.nvim",
-  tag = "v1.0.0",
+  tag = "v1.0.1",
   event = { "InsertEnter", "CmdlineEnter" },
   opts = {
     ignored_filetypes = { "", "python", "haskell", "markdown", "text" },

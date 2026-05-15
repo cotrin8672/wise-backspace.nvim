@@ -16,9 +16,8 @@
 ## Behavior
 
 - Non-leading-whitespace Backspace returns native `<BS>`.
-- When the cursor's left side contains only spaces, remove all of those spaces.
-- Whitespace-only lines remove all spaces and then return native line deletion to join upward.
-- If the leading whitespace contains a tab, return native `<BS>` for the initial version.
+- When the cursor's left side contains only spaces or tabs, remove all of that indentation.
+- Whitespace-only lines remove all indentation and then return native line deletion to join upward.
 
 ## Code Style
 
@@ -31,6 +30,6 @@
 
 - Use headless Neovim tests as the source of truth.
 - Test expression return values and real buffer effects.
-- Cover ordinary text deletion, dot-repeat behavior, full leading-space deletion, whitespace-only line joining, ignored filetypes, tabs in leading whitespace, setup idempotence, and command-line mapping installation.
+- Cover ordinary text deletion, dot-repeat behavior, full leading-indentation deletion, whitespace-only line joining, ignored filetypes, tabs in leading whitespace, setup idempotence, and command-line mapping installation.
 - Keep repeatable validation steps in the repository skill at `.codex/skills/wise-backspace-verify`.
 - Before final delivery, run that skill's `scripts/verify.ps1` workflow unless the environment blocks it.
