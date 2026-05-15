@@ -16,6 +16,7 @@
 ## Behavior
 
 - Non-leading-whitespace Backspace returns native `<BS>`.
+- Whitespace-only lines remove all spaces and then return native line deletion to join upward.
 - Leading whitespace Backspace moves to the previous proper indent position.
 - Prefer a smaller indent returned by `indentexpr`.
 - Fall back to the nearest lower `shiftwidth` boundary.

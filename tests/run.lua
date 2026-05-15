@@ -31,6 +31,10 @@ local function smart_delete(count)
   return string.rep("<C-G>U<Left>", count) .. string.rep("<Del>", count)
 end
 
+local function blank_line_delete(col, line_length)
+  return string.rep("<C-G>U<Left>", col) .. string.rep("<Del>", line_length) .. "<BS>"
+end
+
 local function reset(lines)
   vim.cmd("enew!")
   vim.bo.filetype = "lua"
@@ -100,9 +104,15 @@ test("leading spaces delete to previous shiftwidth boundary", function()
 end)
 
 test("single leading space deletion stays native", function()
-  reset({ " " })
+  reset({ " x" })
   set_cursor(1, 1)
   eq(wise.backspace(), "<BS>")
+end)
+
+test("whitespace-only line deletes all spaces and joins upward", function()
+  reset({ "if ok {", "        " })
+  set_cursor(2, 8)
+  eq(wise.backspace(), blank_line_delete(7, 8))
 end)
 
 test("shiftwidth zero follows Neovim effective shiftwidth", function()
@@ -192,11 +202,19 @@ test("mapping changes real buffer text for smart indentation", function()
   eq(vim.api.nvim_get_current_line(), "    value")
 end)
 
-test("mapping changes whitespace-only line at insert end", function()
+test("mapping clears first whitespace-only line at insert end", function()
   reset({ "        " })
   set_cursor(1, 0)
   feed("A<BS><Esc>")
-  eq(vim.api.nvim_get_current_line(), "    ")
+  eq(vim.api.nvim_get_current_line(), "")
+end)
+
+test("mapping joins whitespace-only line upward", function()
+  reset({ "if ok {", "        " })
+  set_cursor(2, 0)
+  feed("A<BS><Esc>")
+  eq(vim.api.nvim_buf_line_count(0), 1)
+  eq(vim.api.nvim_get_current_line(), "if ok {")
 end)
 
 test("mapping changes real buffer text natively for ordinary text", function()

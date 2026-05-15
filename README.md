@@ -9,6 +9,7 @@ Current release: `1.0.0`.
 ## Behavior
 
 - On ordinary text, return native `<BS>`.
+- On a whitespace-only line, remove all spaces and then join upward with native line deletion.
 - In leading spaces, prefer the current line's `indentexpr` result when it is smaller than the current indent.
 - Otherwise, move to the nearest lower `shiftwidth()` boundary.
 - If the previous non-empty line ends with an opener such as `{`, `(`, `[`, `<`, or `:`, avoid moving deeper over-indented lines below that opened block's first indent level.
