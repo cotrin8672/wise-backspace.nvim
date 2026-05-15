@@ -2,16 +2,20 @@
 
 Smart Backspace for Neovim insert mode.
 
-Current release: `1.0.3`.
+Current release: `1.0.4`.
 
-`wise-backspace.nvim` leaves ordinary text deletion to native `<BS>`, so typo fixes remain part of insert redo and work with `.`. It only takes over when everything to the left of the cursor on the current line is indentation, then removes that indentation and joins the line upward.
+`wise-backspace.nvim` leaves ordinary text deletion to native `<BS>`, so typo fixes remain part of insert redo and work with `.`. It only takes over when everything to the left of the cursor on the current line is indentation, then returns a key sequence that either fixes indentation or joins the line upward.
 
 ## Behavior
 
 - On ordinary text, return native `<BS>`.
-- When the cursor's left side contains only spaces or tabs, remove the whole leading indentation and join upward, even if the cursor is inside the indentation.
-- On a whitespace-only line, remove all indentation and then join upward with native line deletion.
-- Pair deletion is intentionally out of scope. If you use `nvim-autopairs`, keep `map_bs = false`.
+- When the cursor is between a simple matched pair, remove both sides of the pair.
+- When the cursor's left side contains only spaces or tabs, behave as if the cursor were at the first non-whitespace character or at end of line.
+- On the first line, remove leading indentation without joining upward.
+- On an over-indented line, reduce indentation to the previous non-empty line's indentation.
+- After an opening pair or before a dot-prefixed continuation, reduce over-indentation to one `shiftwidth` deeper than the previous non-empty line; if it is already there, join upward.
+- On a whitespace-only line inside an empty bracket block, collapse the block onto one line.
+- Otherwise, remove leading indentation and join upward with native line deletion.
 
 ## Setup
 
@@ -24,7 +28,7 @@ With lazy.nvim:
 ```lua
 {
   "cotrin8672/wise-backspace.nvim",
-  tag = "v1.0.3",
+  tag = "v1.0.4",
   event = { "InsertEnter", "CmdlineEnter" },
   opts = {
     ignored_filetypes = { "", "python", "haskell", "markdown", "text" },

@@ -25,19 +25,20 @@ local function feed(keys)
   vim.api.nvim_feedkeys(termcodes(keys), "xt", false)
 end
 
-local function delete_indent(left_count, delete_count)
-  if left_count == 1 and delete_count == 1 then
-    return "<BS>"
-  end
-  return string.rep("<C-G>U<Left>", left_count) .. string.rep("<Del>", delete_count)
+local function left(count)
+  return string.rep("<C-G>U<Left>", count)
 end
 
-local function delete_indent_and_join(left_count, delete_count)
-  return delete_indent(left_count, delete_count) .. "<BS>"
+local function del(count)
+  return string.rep("<Del>", count)
 end
 
-local function blank_line_delete(col, line_length)
-  return string.rep("<C-G>U<Left>", col) .. string.rep("<Del>", line_length) .. "<BS>"
+local function replace_leading(col, leading_len, replacement)
+  return left(col) .. del(leading_len) .. replacement
+end
+
+local function join_after_removing_leading(col, leading_len)
+  return replace_leading(col, leading_len, "") .. "<BS>"
 end
 
 local function reset(lines)
@@ -56,6 +57,10 @@ local function set_cursor(line, col)
   vim.api.nvim_win_set_cursor(0, { line, col })
 end
 
+local function lines()
+  return vim.api.nvim_buf_get_lines(0, 0, -1, false)
+end
+
 test("insert and cmdline mappings are installed as expr mappings", function()
   reset()
   local insert = vim.fn.maparg("<BS>", "i", false, true)
@@ -72,7 +77,7 @@ test("setup is idempotent and replaces ignored filetypes", function()
   wise.setup({ ignored_filetypes = { "lua" } })
   vim.bo.filetype = "markdown"
   set_cursor(1, 4)
-  eq(wise.backspace(), delete_indent_and_join(4, 4))
+  eq(wise.backspace(), replace_leading(4, 4, ""))
 
   wise.setup({ ignored_filetypes = { "markdown" } })
   eq(wise.backspace(), "<BS>")
@@ -94,196 +99,182 @@ test("ignored default filetypes return native backspace", function()
   eq(wise.backspace(), "<BS>")
 end)
 
-test("leading indentation before text is deleted all at once", function()
+test("first line deletes leading indentation without joining", function()
   reset({ "        value" })
   set_cursor(1, 8)
-  eq(wise.backspace(), delete_indent_and_join(8, 8))
+  eq(wise.backspace(), replace_leading(8, 8, ""))
 
-  reset({ "      value" })
-  set_cursor(1, 6)
-  eq(wise.backspace(), delete_indent_and_join(6, 6))
-
-  reset({ "    value" })
-  set_cursor(1, 4)
-  eq(wise.backspace(), delete_indent_and_join(4, 4))
+  feed("i<BS><Esc>")
+  eq(lines(), { "value" })
 end)
 
-test("cursor inside multiple indent levels deletes the whole leading indentation", function()
-  reset({ "            value" })
-  set_cursor(1, 8)
-  eq(wise.backspace(), delete_indent_and_join(8, 12))
-
+test("cursor inside indentation behaves as if it were at first non-whitespace", function()
   reset({ "            value" })
   set_cursor(1, 4)
-  eq(wise.backspace(), delete_indent_and_join(4, 12))
+  eq(wise.backspace(), replace_leading(12, 12, ""))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "value" })
 end)
 
-test("leading tabs before text are deleted all at once", function()
-  reset({ "\t\tvalue" })
-  set_cursor(1, 2)
-  eq(wise.backspace(), delete_indent_and_join(2, 2))
-
+test("tabs and spaces are both indentation", function()
   reset({ "\t    value" })
-  set_cursor(1, 5)
-  eq(wise.backspace(), delete_indent_and_join(5, 5))
-end)
-
-test("single leading indentation before text also joins upward", function()
-  reset({ " x" })
-  set_cursor(1, 1)
-  eq(wise.backspace(), "<BS><BS>")
-end)
-
-test("indentexpr does not limit full leading indent deletion", function()
-  reset({ "        value" })
-  vim.g.wise_backspace_test_indent = 4
-  vim.bo.indentexpr = "g:wise_backspace_test_indent"
-  set_cursor(1, 8)
-  eq(wise.backspace(), delete_indent_and_join(8, 8))
-end)
-
-test("shiftwidth does not limit full leading indent deletion", function()
-  reset({ "        value" })
-  vim.bo.shiftwidth = 2
-  set_cursor(1, 8)
-  eq(wise.backspace(), delete_indent_and_join(8, 8))
-end)
-
-test("whitespace-only line deletes all spaces and joins upward", function()
-  reset({ "if ok {", "        " })
-  set_cursor(2, 8)
-  eq(wise.backspace(), blank_line_delete(7, 8))
-end)
-
-test("whitespace-only line with tabs deletes all indentation and joins upward", function()
-  reset({ "if ok {", "\t\t" })
-  set_cursor(2, 2)
-  eq(wise.backspace(), blank_line_delete(1, 2))
-end)
-
-test("mapping deletes all leading indentation before text in lua buffers", function()
-  reset({ "        value" })
-  set_cursor(1, 8)
-  feed("i<BS><Esc>")
-  eq(vim.api.nvim_get_current_line(), "value")
-end)
-
-test("mapping deletes all leading indentation when cursor is inside it", function()
-  reset({ "            value" })
-  set_cursor(1, 8)
-  feed("i<BS><Esc>")
-  eq(vim.api.nvim_get_current_line(), "value")
-end)
-
-test("mapping deletes mixed tab indentation before text in lua buffers", function()
-  reset({ "\t    value" })
-  set_cursor(1, 5)
-  feed("i<BS><Esc>")
-  eq(vim.api.nvim_get_current_line(), "value")
-end)
-
-test("mapping deletes indentation and joins upward in one backspace", function()
-  reset({ "if ok {", "            value" })
-  set_cursor(2, 8)
-  feed("i<BS><Esc>")
-  eq(vim.api.nvim_buf_line_count(0), 1)
-  eq(vim.api.nvim_get_current_line(), "if ok {value")
-end)
-
-test("mapping joins upward when cursor is at the end of leading indentation", function()
-  reset({ "local x = 1", "        return x" })
-  set_cursor(2, 8)
-  feed("i<BS><Esc>")
-  eq(vim.api.nvim_buf_line_count(0), 1)
-  eq(vim.api.nvim_get_current_line(), "local x = 1return x")
-end)
-
-test("mapping joins upward when cursor is inside leading indentation", function()
-  reset({ "local x = 1", "            return x" })
-  set_cursor(2, 4)
-  feed("i<BS><Esc>")
-  eq(vim.api.nvim_buf_line_count(0), 1)
-  eq(vim.api.nvim_get_current_line(), "local x = 1return x")
-end)
-
-test("mapping joins upward with mixed tab indentation before text", function()
-  reset({ "local x = 1", "\t    return x" })
-  set_cursor(2, 3)
-  feed("i<BS><Esc>")
-  eq(vim.api.nvim_buf_line_count(0), 1)
-  eq(vim.api.nvim_get_current_line(), "local x = 1return x")
-end)
-
-test("mapping removes first-line indentation before text without changing text", function()
-  reset({ "            return x" })
-  set_cursor(1, 4)
-  feed("i<BS><Esc>")
-  eq(vim.api.nvim_buf_line_count(0), 1)
-  eq(vim.api.nvim_get_current_line(), "return x")
-end)
-
-test("mapping clears first whitespace-only line at insert end", function()
-  reset({ "        " })
-  set_cursor(1, 0)
-  feed("A<BS><Esc>")
-  eq(vim.api.nvim_get_current_line(), "")
-end)
-
-test("mapping joins whitespace-only line upward", function()
-  reset({ "if ok {", "        " })
-  set_cursor(2, 0)
-  feed("A<BS><Esc>")
-  eq(vim.api.nvim_buf_line_count(0), 1)
-  eq(vim.api.nvim_get_current_line(), "if ok {")
-end)
-
-test("mapping joins whitespace-only line upward from inside indentation", function()
-  reset({ "if ok {", "        " })
-  set_cursor(2, 4)
-  feed("i<BS><Esc>")
-  eq(vim.api.nvim_buf_line_count(0), 1)
-  eq(vim.api.nvim_get_current_line(), "if ok {")
-end)
-
-test("mapping joins whitespace-only line upward without changing following lines", function()
-  reset({ "if ok {", "        ", "after()" })
-  set_cursor(2, 0)
-  feed("A<BS><Esc>")
-  eq(vim.api.nvim_buf_line_count(0), 2)
-  eq(vim.api.nvim_buf_get_lines(0, 0, 1, false)[1], "if ok {")
-  eq(vim.api.nvim_buf_get_lines(0, 1, 2, false)[1], "after()")
-end)
-
-test("mapping changes real buffer text natively for ordinary text", function()
-  reset({ "got" })
   set_cursor(1, 3)
-  feed("a<BS><Esc>")
-  eq(vim.api.nvim_get_current_line(), "go")
+  eq(wise.backspace(), replace_leading(5, 5, ""))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "value" })
+end)
+
+test("over-indented line under normal code unindents to previous non-empty line", function()
+  reset({ "root", "        value" })
+  set_cursor(2, 8)
+  eq(wise.backspace(), replace_leading(8, 8, ""))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "root", "value" })
+end)
+
+test("over-indented line preserves previous non-empty indentation", function()
+  reset({ "  root", "        value" })
+  set_cursor(2, 8)
+  eq(wise.backspace(), replace_leading(8, 8, "  "))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "  root", "  value" })
+end)
+
+test("correctly indented line joins with previous line", function()
+  reset({ "root", "value" })
+  set_cursor(2, 0)
+  feed("i<BS><Esc>")
+  eq(lines(), { "rootvalue" })
+end)
+
+test("left side indentation with right text joins when indentation already matches", function()
+  reset({ "  root", "  value" })
+  set_cursor(2, 2)
+  eq(wise.backspace(), join_after_removing_leading(2, 2))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "  rootvalue" })
+end)
+
+test("opening pair overindent returns to one shiftwidth deeper", function()
+  reset({ "if ok {", "        value" })
+  set_cursor(2, 8)
+  eq(wise.backspace(), replace_leading(8, 8, "    "))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "if ok {", "    value" })
+end)
+
+test("opening pair correct indent joins upward", function()
+  reset({ "if ok {", "    value" })
+  set_cursor(2, 4)
+  eq(wise.backspace(), join_after_removing_leading(4, 4))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "if ok {value" })
+end)
+
+test("dot-prefixed continuation overindent returns to one shiftwidth deeper", function()
+  reset({ "object", "        .call()" })
+  set_cursor(2, 8)
+  eq(wise.backspace(), replace_leading(8, 8, "    "))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "object", "    .call()" })
+end)
+
+test("dot-prefixed continuation at correct indent joins upward", function()
+  reset({ "object", "    .call()" })
+  set_cursor(2, 4)
+  feed("i<BS><Esc>")
+  eq(lines(), { "object.call()" })
+end)
+
+test("whitespace-only line under opening pair unindents before it joins", function()
+  reset({ "if ok {", "        " })
+  set_cursor(2, 8)
+  eq(wise.backspace(), replace_leading(8, 8, "    "))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "if ok {", "    " })
+end)
+
+test("empty bracket block collapses to a single line", function()
+  reset({ "call({", "        ", "})" })
+  set_cursor(2, 8)
+  feed("i<BS><Esc>")
+  eq(lines(), { "call({})" })
+end)
+
+test("only whitespace before first non-empty line removes indentation", function()
+  reset({ "", "        value" })
+  set_cursor(2, 8)
+  feed("i<BS><Esc>")
+  eq(lines(), { "", "value" })
+end)
+
+test("blank line before first non-empty line joins upward after indentation is gone", function()
+  reset({ "", "value" })
+  set_cursor(2, 0)
+  feed("i<BS><Esc>")
+  eq(lines(), { "value" })
+end)
+
+test("previous blank line is removed after current indentation matches previous non-empty line", function()
+  reset({ "root", "", "value" })
+  set_cursor(3, 0)
+  feed("i<BS><Esc>")
+  eq(lines(), { "root", "value" })
 end)
 
 test("mapping keeps native behavior when cursor left side contains text", function()
   reset({ "  hello" })
   set_cursor(1, 7)
   feed("a<BS><Esc>")
-  eq(vim.api.nvim_get_current_line(), "  hell")
+  eq(lines(), { "  hell" })
+end)
+
+test("mapping removes paired brackets when cursor is between them", function()
+  reset({ "call()" })
+  set_cursor(1, 5)
+  feed("i<BS><Esc>")
+  eq(lines(), { "call" })
+end)
+
+test("mapping removes paired quotes when cursor is between them", function()
+  reset({ 'value = ""' })
+  set_cursor(1, 9)
+  feed("i<BS><Esc>")
+  eq(lines(), { "value = " })
+end)
+
+test("mapping does not remove mismatched pair-like text", function()
+  reset({ "call(]" })
+  set_cursor(1, 5)
+  feed("i<BS><Esc>")
+  eq(lines(), { "call]" })
 end)
 
 test("dot repeat keeps ordinary backspace in the insert redo sequence", function()
   reset({ "alpha beta" })
   set_cursor(1, 0)
   feed("ciwgpj<BS>t-5-mini<Esc>w.")
-  eq(vim.api.nvim_get_current_line(), "gpt-5-mini gpt-5-mini")
+  eq(lines(), { "gpt-5-mini gpt-5-mini" })
 end)
 
-test("dot repeat replays smart indentation join", function()
-  reset({ "a", "    x", "b", "    y" })
+test("dot repeat replays smart unindent", function()
+  reset({ "root", "    x", "root", "    y" })
   set_cursor(2, 4)
   feed("i<BS><Esc>")
-  eq(vim.api.nvim_buf_get_lines(0, 0, -1, false), { "ax", "b", "    y" })
+  eq(lines(), { "root", "x", "root", "    y" })
 
-  set_cursor(3, 4)
+  set_cursor(4, 4)
   feed(".")
-  eq(vim.api.nvim_buf_get_lines(0, 0, -1, false), { "ax", "by" })
+  eq(lines(), { "root", "x", "root", "y" })
 end)
 
 local failures = {}
