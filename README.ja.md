@@ -15,6 +15,7 @@ Neovim の insert mode で使う smart Backspace プラグインです。
 - インデントが深すぎる行では、直前の非空白行と同じインデントまで戻す。
 - 直前の非空白行が opening pair で終わる場合、または現在行が dot-prefixed continuation の場合、深すぎるインデントを `shiftwidth` 1 段分まで戻す。すでにその位置なら前行へ join する。
 - 空白だけの行が空の bracket block 内にある場合、block を 1 行に collapse する。
+- Tree-sitter support を明示的に有効化した場合、Lua の `if ... end` などの keyword block でもインデント補正と空 block collapse を行う。
 - それ以外では、先頭インデントを削除して native の行削除で前行へ join する。
 
 ## セットアップ
@@ -39,10 +40,15 @@ lazy.nvim の例:
 オプション:
 
 - `ignored_filetypes`: 常に native `<BS>` を使う filetype。
+- `treesitter`: optional な Tree-sitter block support。デフォルトでは無効。
 
 ```lua
 require("wise-backspace").setup({
   ignored_filetypes = { "", "python", "haskell", "markdown", "text" },
+  treesitter = {
+    enabled = false,
+    languages = { "lua" },
+  },
 })
 ```
 
@@ -51,6 +57,19 @@ require("wise-backspace").setup({
 ```lua
 { "", "python", "haskell", "markdown", "text" }
 ```
+
+Tree-sitter support は Neovim 組み込みの Tree-sitter API を使い、`nvim-treesitter` には依存しません。明示的に opt-in した場合だけ有効です。
+
+```lua
+require("wise-backspace").setup({
+  treesitter = {
+    enabled = true,
+    languages = { "lua" },
+  },
+})
+```
+
+現在の built-in provider は Lua の `if ... end`, `do ... end`, `while ... end`, `for ... end`, `repeat ... until`, function block に対応します。未対応言語や parser がない場合は、通知せずデフォルト挙動へ fallback します。
 
 初回の insert mode / command-line entry で lazy-load する例:
 

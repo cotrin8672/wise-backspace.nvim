@@ -1,3 +1,5 @@
+local treesitter = require("wise-backspace.treesitter")
+
 local M = {}
 
 local function current_line_context()
@@ -109,7 +111,12 @@ local function collapse_empty_brackets(col, current_len, next_line)
   return left(col) .. del(current_len) .. "<BS><Del>" .. del(next_indent)
 end
 
-function M.backspace_keys()
+local function collapse_empty_keyword_block(col, current_len, next_line)
+  local next_indent = #(next_line:match("^[ \t]*"))
+  return left(col) .. del(current_len) .. "<BS> <Del>" .. del(next_indent)
+end
+
+function M.backspace_keys(treesitter_opts)
   local row, cursor_col, current_line = current_line_context()
   local behind_cursor = current_line:sub(1, cursor_col)
 
@@ -124,7 +131,7 @@ function M.backspace_keys()
   local leading_len = #leading_whitespace(current_line)
   local prev_line = line_at(row - 1)
   local next_line = line_at(row + 1)
-  local prev_non_ws_line = previous_non_whitespace_line(row)
+  local prev_non_ws_line, prev_non_ws_row = previous_non_whitespace_line(row)
 
   if row == 1 then
     return replace_leading(col, leading_len, "")
@@ -141,10 +148,15 @@ function M.backspace_keys()
     return collapse_empty_brackets(col, #current_line, next_line)
   end
 
+  if contains_only_whitespace(current_line) and treesitter.empty_block(treesitter_opts, row) then
+    return collapse_empty_keyword_block(col, #current_line, next_line)
+  end
+
   local previous_indent = leading_whitespace(prev_non_ws_line)
   local previous_indent_width = leading_whitespace_width(prev_non_ws_line)
   local current_indent_width = leading_whitespace_width(current_line)
   local previous_ends_opening_pair = is_opening_pair(line_last_non_whitespace_char(prev_non_ws_line))
+  local previous_starts_keyword_block = treesitter.block_after_previous_line(treesitter_opts, row, prev_non_ws_row)
 
   if previous_ends_opening_pair or current_line_starts_with_dot(current_line) then
     local correct_indent = previous_indent .. string.rep(" ", vim.bo.shiftwidth)
@@ -153,6 +165,14 @@ function M.backspace_keys()
       return replace_leading(col, leading_len, correct_indent)
     end
     return join_after_removing_leading(col, leading_len)
+  end
+
+  if previous_starts_keyword_block then
+    local correct_indent = previous_indent .. string.rep(" ", vim.bo.shiftwidth)
+    local correct_width = previous_indent_width + vim.bo.shiftwidth
+    if current_indent_width > correct_width then
+      return replace_leading(col, leading_len, correct_indent)
+    end
   end
 
   if current_indent_width > previous_indent_width then

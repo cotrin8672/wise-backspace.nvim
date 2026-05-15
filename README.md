@@ -15,6 +15,7 @@ Current release: `1.0.4`.
 - On an over-indented line, reduce indentation to the previous non-empty line's indentation.
 - After an opening pair or before a dot-prefixed continuation, reduce over-indentation to one `shiftwidth` deeper than the previous non-empty line; if it is already there, join upward.
 - On a whitespace-only line inside an empty bracket block, collapse the block onto one line.
+- When Tree-sitter support is explicitly enabled, Lua keyword blocks such as `if ... end` can use the same indentation reduction and empty-block collapse behavior.
 - Otherwise, remove leading indentation and join upward with native line deletion.
 
 ## Setup
@@ -39,10 +40,15 @@ With lazy.nvim:
 Options:
 
 - `ignored_filetypes`: filetypes that always use native `<BS>`.
+- `treesitter`: optional Tree-sitter block support. Disabled by default.
 
 ```lua
 require("wise-backspace").setup({
   ignored_filetypes = { "", "python", "haskell", "markdown", "text" },
+  treesitter = {
+    enabled = false,
+    languages = { "lua" },
+  },
 })
 ```
 
@@ -51,6 +57,19 @@ Default ignored filetypes:
 ```lua
 { "", "python", "haskell", "markdown", "text" }
 ```
+
+Tree-sitter support uses Neovim's built-in Tree-sitter APIs and does not depend on `nvim-treesitter`. It is opt-in:
+
+```lua
+require("wise-backspace").setup({
+  treesitter = {
+    enabled = true,
+    languages = { "lua" },
+  },
+})
+```
+
+Currently, the built-in provider supports Lua blocks such as `if ... end`, `do ... end`, `while ... end`, `for ... end`, `repeat ... until`, and function blocks. Unsupported languages or missing parsers silently fall back to the default behavior.
 
 Lazy-loading on the first insert or command-line entry is supported:
 
