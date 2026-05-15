@@ -20,11 +20,11 @@ local function feed(keys)
   vim.api.nvim_feedkeys(termcodes(keys), "xt", false)
 end
 
-local function delete_left(count)
-  if count == 1 then
+local function delete_indent(left_count, delete_count)
+  if left_count == 1 and delete_count == 1 then
     return "<BS>"
   end
-  return string.rep("<C-G>U<Left>", count) .. string.rep("<Del>", count)
+  return string.rep("<C-G>U<Left>", left_count) .. string.rep("<Del>", delete_count)
 end
 
 local function blank_line_delete(col, line_length)
@@ -63,7 +63,7 @@ test("setup is idempotent and replaces ignored filetypes", function()
   wise.setup({ ignored_filetypes = { "lua" } })
   vim.bo.filetype = "markdown"
   set_cursor(1, 4)
-  eq(wise.backspace(), delete_left(4))
+  eq(wise.backspace(), delete_indent(4, 4))
 
   wise.setup({ ignored_filetypes = { "markdown" } })
   eq(wise.backspace(), "<BS>")
@@ -88,25 +88,35 @@ end)
 test("leading indentation before text is deleted all at once", function()
   reset({ "        value" })
   set_cursor(1, 8)
-  eq(wise.backspace(), delete_left(8))
+  eq(wise.backspace(), delete_indent(8, 8))
 
   reset({ "      value" })
   set_cursor(1, 6)
-  eq(wise.backspace(), delete_left(6))
+  eq(wise.backspace(), delete_indent(6, 6))
 
   reset({ "    value" })
   set_cursor(1, 4)
-  eq(wise.backspace(), delete_left(4))
+  eq(wise.backspace(), delete_indent(4, 4))
+end)
+
+test("cursor inside multiple indent levels deletes the whole leading indentation", function()
+  reset({ "            value" })
+  set_cursor(1, 8)
+  eq(wise.backspace(), delete_indent(8, 12))
+
+  reset({ "            value" })
+  set_cursor(1, 4)
+  eq(wise.backspace(), delete_indent(4, 12))
 end)
 
 test("leading tabs before text are deleted all at once", function()
   reset({ "\t\tvalue" })
   set_cursor(1, 2)
-  eq(wise.backspace(), delete_left(2))
+  eq(wise.backspace(), delete_indent(2, 2))
 
   reset({ "\t    value" })
   set_cursor(1, 5)
-  eq(wise.backspace(), delete_left(5))
+  eq(wise.backspace(), delete_indent(5, 5))
 end)
 
 test("single leading space deletion stays native", function()
@@ -120,14 +130,14 @@ test("indentexpr does not limit full leading indent deletion", function()
   vim.g.wise_backspace_test_indent = 4
   vim.bo.indentexpr = "g:wise_backspace_test_indent"
   set_cursor(1, 8)
-  eq(wise.backspace(), delete_left(8))
+  eq(wise.backspace(), delete_indent(8, 8))
 end)
 
 test("shiftwidth does not limit full leading indent deletion", function()
   reset({ "        value" })
   vim.bo.shiftwidth = 2
   set_cursor(1, 8)
-  eq(wise.backspace(), delete_left(8))
+  eq(wise.backspace(), delete_indent(8, 8))
 end)
 
 test("whitespace-only line deletes all spaces and joins upward", function()
@@ -149,11 +159,26 @@ test("mapping deletes all leading indentation before text in lua buffers", funct
   eq(vim.api.nvim_get_current_line(), "value")
 end)
 
+test("mapping deletes all leading indentation when cursor is inside it", function()
+  reset({ "            value" })
+  set_cursor(1, 8)
+  feed("i<BS><Esc>")
+  eq(vim.api.nvim_get_current_line(), "value")
+end)
+
 test("mapping deletes mixed tab indentation before text in lua buffers", function()
   reset({ "\t    value" })
   set_cursor(1, 5)
   feed("i<BS><Esc>")
   eq(vim.api.nvim_get_current_line(), "value")
+end)
+
+test("mapping deletes indentation first and a second backspace joins upward", function()
+  reset({ "if ok {", "            value" })
+  set_cursor(2, 8)
+  feed("i<BS><BS><Esc>")
+  eq(vim.api.nvim_buf_line_count(0), 1)
+  eq(vim.api.nvim_get_current_line(), "if ok {value")
 end)
 
 test("mapping clears first whitespace-only line at insert end", function()

@@ -13,11 +13,15 @@ local function is_spaces_only_line(line)
   return line:find("^[ \t]*$") ~= nil
 end
 
-local function keys_for_delete(count)
-  if count == 1 then
+local function leading_indentation_width(line)
+  return #(line:match("^[ \t]*"))
+end
+
+local function keys_for_delete(left_count, delete_count)
+  if left_count == 1 and delete_count == 1 then
     return "<BS>"
   end
-  return string.rep("<C-G>U<Left>", count) .. string.rep("<Del>", count)
+  return string.rep("<C-G>U<Left>", left_count) .. string.rep("<Del>", delete_count)
 end
 
 local function keys_for_blank_line(col, line_length)
@@ -36,7 +40,7 @@ function M.backspace_keys()
     return keys_for_blank_line(col, #line)
   end
 
-  return keys_for_delete(col)
+  return keys_for_delete(col, leading_indentation_width(line))
 end
 
 return M
