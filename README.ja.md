@@ -13,6 +13,7 @@ Neovim の insert mode で使う smart Backspace プラグインです。
 - 先頭空白では、現在行の `indentexpr` が現在インデントより小さい値を返す場合、その位置へ戻る。
 - `indentexpr` が使えない場合は、`shiftwidth()` のひとつ前の境界へ戻る。
 - 直前の非空行が `{`、`(`、`[`、`<`、`:` などの opener で終わる場合、開いたブロックの最初のインデントより浅く戻りすぎないようにする。
+- Treesitter による opener 判定はデフォルトで有効。string、comment、character、regex ノード内の opener は無視し、Treesitter node が取れない場合は文字ベース判定へ戻る。
 - 先頭空白に tab が含まれる場合は native `<BS>` を返す。
 - ペア削除は実装しない。`nvim-autopairs` を使う場合は `map_bs = false` を維持する。
 
@@ -31,15 +32,20 @@ lazy.nvim の例:
   event = { "InsertEnter", "CmdlineEnter" },
   opts = {
     ignored_filetypes = { "", "python", "haskell", "markdown", "text" },
+    treesitter = true,
   },
 }
 ```
 
-設定できるオプションは `ignored_filetypes` だけです。
+オプション:
+
+- `ignored_filetypes`: 常に native `<BS>` を使う filetype。
+- `treesitter`: opener 判定に Treesitter を使う。デフォルトは `true`。
 
 ```lua
 require("wise-backspace").setup({
   ignored_filetypes = { "", "python", "haskell", "markdown", "text" },
+  treesitter = true,
 })
 ```
 

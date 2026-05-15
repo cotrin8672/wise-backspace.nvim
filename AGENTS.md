@@ -7,7 +7,7 @@
 ## Scope
 
 - Implement a small Lua plugin, not a dotfiles-only script.
-- Expose only one user option: `ignored_filetypes`.
+- Expose only two user options: `ignored_filetypes` and `treesitter`.
 - Use `vim.bo.filetype` for filetype checks.
 - Do not implement pair deletion.
 - Do not replace buffer text directly during Backspace. Return key sequences from an expression mapping.
@@ -21,6 +21,7 @@
 - Prefer a smaller indent returned by `indentexpr`.
 - Fall back to the nearest lower `shiftwidth` boundary.
 - When the previous non-empty line ends with an opener, keep the fallback target at least one `shiftwidth` deeper than that line.
+- Use Treesitter as the primary opener detection path when enabled. Ignore openers inside string, comment, character, or regex nodes, and fall back to the character-based heuristic when Treesitter is unavailable.
 - If the leading whitespace contains a tab, return native `<BS>` for the initial version.
 
 ## Code Style

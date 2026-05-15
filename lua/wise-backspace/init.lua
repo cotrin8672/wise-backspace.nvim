@@ -4,10 +4,12 @@ local M = {}
 
 local defaults = {
   ignored_filetypes = { "", "python", "haskell", "markdown", "text" },
+  treesitter = true,
 }
 
 local config = {
   ignored_filetypes = vim.list_extend({}, defaults.ignored_filetypes),
+  treesitter = defaults.treesitter,
 }
 
 local ignored_filetypes = {}
@@ -20,8 +22,10 @@ local function rebuild_ignored_filetypes()
 end
 
 local function apply_config(opts)
+  opts = opts or {}
   config = {
-    ignored_filetypes = vim.list_extend({}, opts and opts.ignored_filetypes or defaults.ignored_filetypes),
+    ignored_filetypes = vim.list_extend({}, opts.ignored_filetypes or defaults.ignored_filetypes),
+    treesitter = opts.treesitter ~= false,
   }
   rebuild_ignored_filetypes()
 end
@@ -33,7 +37,7 @@ function M.backspace()
     return "<BS>"
   end
 
-  return indent.backspace_keys()
+  return indent.backspace_keys(config)
 end
 
 function M.setup(opts)

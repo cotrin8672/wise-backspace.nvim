@@ -13,6 +13,7 @@ Current release: `1.0.0`.
 - In leading spaces, prefer the current line's `indentexpr` result when it is smaller than the current indent.
 - Otherwise, move to the nearest lower `shiftwidth()` boundary.
 - If the previous non-empty line ends with an opener such as `{`, `(`, `[`, `<`, or `:`, avoid moving deeper over-indented lines below that opened block's first indent level.
+- Treesitter opener detection is enabled by default. It ignores openers inside string, comment, character, or regex nodes, and falls back to character detection when no Treesitter node is available.
 - If the leading whitespace contains a tab, return native `<BS>`.
 - Pair deletion is intentionally out of scope. If you use `nvim-autopairs`, keep `map_bs = false`.
 
@@ -31,15 +32,20 @@ With lazy.nvim:
   event = { "InsertEnter", "CmdlineEnter" },
   opts = {
     ignored_filetypes = { "", "python", "haskell", "markdown", "text" },
+    treesitter = true,
   },
 }
 ```
 
-The only option is `ignored_filetypes`.
+Options:
+
+- `ignored_filetypes`: filetypes that always use native `<BS>`.
+- `treesitter`: use Treesitter for opener detection. Defaults to `true`.
 
 ```lua
 require("wise-backspace").setup({
   ignored_filetypes = { "", "python", "haskell", "markdown", "text" },
+  treesitter = true,
 })
 ```
 

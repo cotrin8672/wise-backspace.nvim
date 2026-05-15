@@ -35,6 +35,45 @@ local function blank_line_delete(col, line_length)
   return string.rep("<C-G>U<Left>", col) .. string.rep("<Del>", line_length) .. "<BS>"
 end
 
+local function with_treesitter_node(node_type, fn)
+  local treesitter = vim.treesitter
+  local original_get_node = treesitter.get_node
+  treesitter.get_node = function()
+    if node_type == "error" then
+      error("treesitter unavailable")
+    end
+
+    return {
+      type = function()
+        return node_type
+      end,
+      parent = function()
+        return nil
+      end,
+    }
+  end
+
+  local ok, err = pcall(fn)
+  treesitter.get_node = original_get_node
+  if not ok then
+    error(err, 0)
+  end
+end
+
+local function with_no_treesitter_node(fn)
+  local treesitter = vim.treesitter
+  local original_get_node = treesitter.get_node
+  treesitter.get_node = function()
+    return nil
+  end
+
+  local ok, err = pcall(fn)
+  treesitter.get_node = original_get_node
+  if not ok then
+    error(err, 0)
+  end
+end
+
 local function reset(lines)
   vim.cmd("enew!")
   vim.bo.filetype = "lua"
@@ -71,6 +110,15 @@ test("setup is idempotent and replaces ignored filetypes", function()
 
   wise.setup({ ignored_filetypes = { "markdown" } })
   eq(wise.backspace(), "<BS>")
+end)
+
+test("setup can disable treesitter opener detection", function()
+  reset({ "  if ok {", "", "        value" })
+  wise.setup({ treesitter = false })
+  with_treesitter_node("string", function()
+    set_cursor(3, 8)
+    eq(wise.backspace(), smart_delete(2))
+  end)
 end)
 
 test("ordinary text returns native backspace", function()
@@ -177,6 +225,46 @@ test("opener fallback keeps over-indented lines inside the opened block", functi
   eq(wise.backspace(), smart_delete(4))
 end)
 
+test("treesitter keeps opener fallback for normal code nodes", function()
+  reset({ "  if ok {", "", "        value" })
+  with_treesitter_node("block", function()
+    set_cursor(3, 8)
+    eq(wise.backspace(), smart_delete(2))
+  end)
+end)
+
+test("treesitter ignores openers inside string nodes", function()
+  reset({ '  "if ok {', "", "        value" })
+  with_treesitter_node("string", function()
+    set_cursor(3, 8)
+    eq(wise.backspace(), smart_delete(4))
+  end)
+end)
+
+test("treesitter ignores openers inside comment nodes", function()
+  reset({ "  -- if ok {", "", "        value" })
+  with_treesitter_node("comment", function()
+    set_cursor(3, 8)
+    eq(wise.backspace(), smart_delete(4))
+  end)
+end)
+
+test("treesitter failure falls back to character opener detection", function()
+  reset({ "if ok {", "", "        value" })
+  with_treesitter_node("error", function()
+    set_cursor(3, 8)
+    eq(wise.backspace(), smart_delete(4))
+  end)
+end)
+
+test("missing treesitter node falls back to character opener detection", function()
+  reset({ "if ok {", "", "        value" })
+  with_no_treesitter_node(function()
+    set_cursor(3, 8)
+    eq(wise.backspace(), smart_delete(4))
+  end)
+end)
+
 test("opener fallback does not trap the cursor at the first block indent", function()
   reset({ "if ok {", "    value" })
   set_cursor(2, 4)
@@ -215,6 +303,15 @@ test("mapping joins whitespace-only line upward", function()
   feed("A<BS><Esc>")
   eq(vim.api.nvim_buf_line_count(0), 1)
   eq(vim.api.nvim_get_current_line(), "if ok {")
+end)
+
+test("mapping joins whitespace-only line upward without changing following lines", function()
+  reset({ "if ok {", "        ", "after()" })
+  set_cursor(2, 0)
+  feed("A<BS><Esc>")
+  eq(vim.api.nvim_buf_line_count(0), 2)
+  eq(vim.api.nvim_buf_get_lines(0, 0, 1, false)[1], "if ok {")
+  eq(vim.api.nvim_buf_get_lines(0, 1, 2, false)[1], "after()")
 end)
 
 test("mapping changes real buffer text natively for ordinary text", function()
