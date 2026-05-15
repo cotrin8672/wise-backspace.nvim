@@ -102,6 +102,15 @@ function M.block_after_previous_line(opts, current_row, previous_row)
   end) ~= nil
 end
 
+function M.block_ends_after_current_line(opts, current_row, previous_row)
+  return find_supported_block(opts, function(node)
+    local start_row, _, end_row = node:range()
+    local current_zero = current_row - 1
+    local previous_zero = previous_row - 1
+    return start_row == previous_zero and end_row == current_zero + 1
+  end) ~= nil
+end
+
 function M.empty_block(opts, current_row)
   return find_supported_block(opts, function(node)
     local start_row, _, end_row = node:range()

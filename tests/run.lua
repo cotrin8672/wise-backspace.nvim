@@ -31,6 +31,10 @@ local function left(count)
   return string.rep("<C-G>U<Left>", count)
 end
 
+local function right(count)
+  return string.rep("<C-G>U<Right>", count)
+end
+
 local function del(count)
   return string.rep("<Del>", count)
 end
@@ -41,6 +45,16 @@ end
 
 local function join_after_removing_leading(col, leading_len)
   return replace_leading(col, leading_len, "") .. "<BS>"
+end
+
+local function join_after_removing_leading_with_space(col, leading_len)
+  return replace_leading(col, leading_len, "") .. "<BS> "
+end
+
+local function collapse_keyword_block_line(col, leading_len, current_line, next_line)
+  local current_text_len = #current_line:sub(leading_len + 1)
+  local next_indent = #(next_line:match("^[ \t]*"))
+  return join_after_removing_leading_with_space(col, leading_len) .. right(current_text_len) .. "<Del> " .. del(next_indent)
 end
 
 local function setup(opts)
@@ -308,14 +322,32 @@ test("treesitter enabled unindents lua keyword block overindent to one shiftwidt
   eq(lines(), { "if ok then", "    value", "end" })
 end, { variants = false })
 
-test("treesitter enabled does not join lua keyword block at correct indent", function()
+test("treesitter enabled collapses lua keyword block line at correct indent", function()
   current_treesitter_enabled = true
   reset({ "if ok then", "    value", "end" })
   set_cursor(2, 4)
-  eq(wise.backspace(), replace_leading(4, 4, ""))
+  eq(wise.backspace(), collapse_keyword_block_line(4, 4, "    value", "end"))
 
   feed("i<BS><Esc>")
-  eq(lines(), { "if ok then", "value", "end" })
+  eq(lines(), { "if ok then value end" })
+end, { variants = false })
+
+test("treesitter enabled collapses nested lua keyword block line with closing indentation", function()
+  current_treesitter_enabled = true
+  reset({ "if outer then", "    if inner then", "        value", "    end", "end" })
+  set_cursor(3, 8)
+  eq(wise.backspace(), collapse_keyword_block_line(8, 8, "        value", "    end"))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "if outer then", "    if inner then value end", "end" })
+end, { variants = false })
+
+test("treesitter enabled keeps multi-line lua keyword blocks when overindented", function()
+  current_treesitter_enabled = true
+  reset({ "if ok then", "        value", "    more", "end" })
+  set_cursor(2, 8)
+  feed("i<BS><Esc>")
+  eq(lines(), { "if ok then", "    value", "    more", "end" })
 end, { variants = false })
 
 test("treesitter enabled collapses empty lua if block", function()
@@ -350,6 +382,22 @@ test("treesitter enabled collapses empty lua repeat block", function()
   eq(lines(), { "repeat until ok" })
 end, { variants = false })
 
+test("treesitter enabled does not collapse lua block with multiple blank lines", function()
+  current_treesitter_enabled = true
+  reset({ "if ok then", "    ", "    ", "end" })
+  set_cursor(2, 4)
+  feed("i<BS><Esc>")
+  eq(lines(), { "if ok then", "", "    ", "end" })
+end, { variants = false })
+
+test("treesitter enabled does not collapse lua block with a comment body", function()
+  current_treesitter_enabled = true
+  reset({ "if ok then", "    -- note", "end" })
+  set_cursor(2, 4)
+  feed("i<BS><Esc>")
+  eq(lines(), { "if ok then", "-- note", "end" })
+end, { variants = false })
+
 test("treesitter enabled handles other supported lua block forms", function()
   local cases = {
     { { "while ok do", "        value", "end" }, { "while ok do", "    value", "end" } },
@@ -372,6 +420,22 @@ test("treesitter ignores unsupported languages without errors", function()
   vim.bo.filetype = "vim"
   set_cursor(2, 8)
   eq(wise.backspace(), replace_leading(8, 8, ""))
+end, { variants = false })
+
+test("ignored filetypes take precedence over treesitter", function()
+  current_treesitter_enabled = true
+  reset({ "if ok then", "        value", "end" })
+  setup({ ignored_filetypes = { "lua" }, treesitter = { enabled = true, languages = { "lua" } } })
+  set_cursor(2, 8)
+  eq(wise.backspace(), "<BS>")
+end, { variants = false })
+
+test("treesitter enabled uses default lua language list", function()
+  current_treesitter_enabled = false
+  reset({ "if ok then", "        value", "end" })
+  setup({ treesitter = { enabled = true } })
+  set_cursor(2, 8)
+  eq(wise.backspace(), replace_leading(8, 8, "    "))
 end, { variants = false })
 
 test("treesitter configured languages fall back when lua is not enabled", function()

@@ -90,8 +90,16 @@ local function current_line_starts_with_dot(line)
   return line:match("^%s*%.") ~= nil
 end
 
+local function current_line_starts_with_lua_comment(line)
+  return line:match("^%s*%-%-") ~= nil
+end
+
 local function left(count)
   return string.rep("<C-G>U<Left>", count)
+end
+
+local function right(count)
+  return string.rep("<C-G>U<Right>", count)
 end
 
 local function del(count)
@@ -104,6 +112,16 @@ end
 
 local function join_after_removing_leading(col, leading_len)
   return replace_leading(col, leading_len, "") .. "<BS>"
+end
+
+local function join_after_removing_leading_with_space(col, leading_len)
+  return replace_leading(col, leading_len, "") .. "<BS> "
+end
+
+local function collapse_keyword_block_line(col, leading_len, current_line, next_line)
+  local current_text_len = #current_line:sub(leading_len + 1)
+  local next_indent = #(next_line:match("^[ \t]*"))
+  return join_after_removing_leading_with_space(col, leading_len) .. right(current_text_len) .. "<Del> " .. del(next_indent)
 end
 
 local function collapse_empty_brackets(col, current_len, next_line)
@@ -157,6 +175,7 @@ function M.backspace_keys(treesitter_opts)
   local current_indent_width = leading_whitespace_width(current_line)
   local previous_ends_opening_pair = is_opening_pair(line_last_non_whitespace_char(prev_non_ws_line))
   local previous_starts_keyword_block = treesitter.block_after_previous_line(treesitter_opts, row, prev_non_ws_row)
+  local keyword_block_ends_after_current_line = treesitter.block_ends_after_current_line(treesitter_opts, row, prev_non_ws_row)
 
   if previous_ends_opening_pair or current_line_starts_with_dot(current_line) then
     local correct_indent = previous_indent .. string.rep(" ", vim.bo.shiftwidth)
@@ -172,6 +191,9 @@ function M.backspace_keys(treesitter_opts)
     local correct_width = previous_indent_width + vim.bo.shiftwidth
     if current_indent_width > correct_width then
       return replace_leading(col, leading_len, correct_indent)
+    end
+    if keyword_block_ends_after_current_line and not current_line_starts_with_lua_comment(current_line) then
+      return collapse_keyword_block_line(col, leading_len, current_line, next_line)
     end
   end
 
