@@ -4,16 +4,13 @@ Neovim の insert mode で使う smart Backspace プラグインです。
 
 現在のリリースは `1.0.0` です。
 
-通常の文字削除は native `<BS>` に委譲します。そのため、入力中の typo 修正は insert redo に残り、`.` repeat でも Backspace が期待通りに効きます。カーソル左側が現在行の先頭空白だけの場合に限り、より自然なインデント位置へ戻るキー列を返します。
+通常の文字削除は native `<BS>` に委譲します。そのため、入力中の typo 修正は insert redo に残り、`.` repeat でも Backspace が期待通りに効きます。カーソル左側が spaces だけの場合に限り、その spaces を一気に削除するキー列を返します。
 
 ## 動作
 
 - 通常文字上では native `<BS>` を返す。
+- カーソル左側が spaces だけの場合、その spaces をすべて削除する。
 - 空白だけの行では、spaces をすべて削除してから native の行削除で前行へ join する。
-- 先頭空白では、現在行の `indentexpr` が現在インデントより小さい値を返す場合、その位置へ戻る。
-- `indentexpr` が使えない場合は、`shiftwidth()` のひとつ前の境界へ戻る。
-- 直前の非空行が `{`、`(`、`[`、`<`、`:` などの opener で終わる場合、開いたブロックの最初のインデントより浅く戻りすぎないようにする。
-- Treesitter による opener 判定はデフォルトで有効。string、comment、character、regex ノード内の opener は無視し、Treesitter node が取れない場合は文字ベース判定へ戻る。
 - 先頭空白に tab が含まれる場合は native `<BS>` を返す。
 - ペア削除は実装しない。`nvim-autopairs` を使う場合は `map_bs = false` を維持する。
 
@@ -32,7 +29,6 @@ lazy.nvim の例:
   event = { "InsertEnter", "CmdlineEnter" },
   opts = {
     ignored_filetypes = { "", "python", "haskell", "markdown", "text" },
-    treesitter = true,
   },
 }
 ```
@@ -40,12 +36,10 @@ lazy.nvim の例:
 オプション:
 
 - `ignored_filetypes`: 常に native `<BS>` を使う filetype。
-- `treesitter`: opener 判定に Treesitter を使う。デフォルトは `true`。
 
 ```lua
 require("wise-backspace").setup({
   ignored_filetypes = { "", "python", "haskell", "markdown", "text" },
-  treesitter = true,
 })
 ```
 

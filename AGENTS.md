@@ -7,7 +7,7 @@
 ## Scope
 
 - Implement a small Lua plugin, not a dotfiles-only script.
-- Expose only two user options: `ignored_filetypes` and `treesitter`.
+- Expose only one user option: `ignored_filetypes`.
 - Use `vim.bo.filetype` for filetype checks.
 - Do not implement pair deletion.
 - Do not replace buffer text directly during Backspace. Return key sequences from an expression mapping.
@@ -16,12 +16,8 @@
 ## Behavior
 
 - Non-leading-whitespace Backspace returns native `<BS>`.
+- When the cursor's left side contains only spaces, remove all of those spaces.
 - Whitespace-only lines remove all spaces and then return native line deletion to join upward.
-- Leading whitespace Backspace moves to the previous proper indent position.
-- Prefer a smaller indent returned by `indentexpr`.
-- Fall back to the nearest lower `shiftwidth` boundary.
-- When the previous non-empty line ends with an opener, keep the fallback target at least one `shiftwidth` deeper than that line.
-- Use Treesitter as the primary opener detection path when enabled. Ignore openers inside string, comment, character, or regex nodes, and fall back to the character-based heuristic when Treesitter is unavailable.
 - If the leading whitespace contains a tab, return native `<BS>` for the initial version.
 
 ## Code Style
@@ -35,6 +31,6 @@
 
 - Use headless Neovim tests as the source of truth.
 - Test expression return values and real buffer effects.
-- Cover ordinary text deletion, dot-repeat behavior, shiftwidth fallback, `indentexpr`, opener fallback, ignored filetypes, tabs in leading whitespace, setup idempotence, and command-line mapping installation.
+- Cover ordinary text deletion, dot-repeat behavior, full leading-space deletion, whitespace-only line joining, ignored filetypes, tabs in leading whitespace, setup idempotence, and command-line mapping installation.
 - Keep repeatable validation steps in the repository skill at `.codex/skills/wise-backspace-verify`.
 - Before final delivery, run that skill's `scripts/verify.ps1` workflow unless the environment blocks it.

@@ -4,16 +4,13 @@ Smart Backspace for Neovim insert mode.
 
 Current release: `1.0.0`.
 
-`wise-backspace.nvim` leaves ordinary text deletion to native `<BS>`, so typo fixes remain part of insert redo and work with `.`. It only takes over when everything to the left of the cursor on the current line is whitespace, then returns key sequences that move the caret back to a better indent position.
+`wise-backspace.nvim` leaves ordinary text deletion to native `<BS>`, so typo fixes remain part of insert redo and work with `.`. It only takes over when everything to the left of the cursor on the current line is spaces, then removes those spaces all at once.
 
 ## Behavior
 
 - On ordinary text, return native `<BS>`.
+- When the cursor's left side contains only spaces, remove all of those spaces.
 - On a whitespace-only line, remove all spaces and then join upward with native line deletion.
-- In leading spaces, prefer the current line's `indentexpr` result when it is smaller than the current indent.
-- Otherwise, move to the nearest lower `shiftwidth()` boundary.
-- If the previous non-empty line ends with an opener such as `{`, `(`, `[`, `<`, or `:`, avoid moving deeper over-indented lines below that opened block's first indent level.
-- Treesitter opener detection is enabled by default. It ignores openers inside string, comment, character, or regex nodes, and falls back to character detection when no Treesitter node is available.
 - If the leading whitespace contains a tab, return native `<BS>`.
 - Pair deletion is intentionally out of scope. If you use `nvim-autopairs`, keep `map_bs = false`.
 
@@ -32,7 +29,6 @@ With lazy.nvim:
   event = { "InsertEnter", "CmdlineEnter" },
   opts = {
     ignored_filetypes = { "", "python", "haskell", "markdown", "text" },
-    treesitter = true,
   },
 }
 ```
@@ -40,12 +36,10 @@ With lazy.nvim:
 Options:
 
 - `ignored_filetypes`: filetypes that always use native `<BS>`.
-- `treesitter`: use Treesitter for opener detection. Defaults to `true`.
 
 ```lua
 require("wise-backspace").setup({
   ignored_filetypes = { "", "python", "haskell", "markdown", "text" },
-  treesitter = true,
 })
 ```
 
