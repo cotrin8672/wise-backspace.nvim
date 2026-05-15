@@ -7,7 +7,12 @@ local function test(name, fn)
 end
 
 local function eq(actual, expected)
-  if actual ~= expected then
+  local same = actual == expected
+  if type(actual) == "table" or type(expected) == "table" then
+    same = vim.deep_equal(actual, expected)
+  end
+
+  if not same then
     error(("expected %s, got %s"):format(vim.inspect(expected), vim.inspect(actual)), 2)
   end
 end
@@ -185,6 +190,38 @@ test("mapping deletes indentation and joins upward in one backspace", function()
   eq(vim.api.nvim_get_current_line(), "if ok {value")
 end)
 
+test("mapping joins upward when cursor is at the end of leading indentation", function()
+  reset({ "local x = 1", "        return x" })
+  set_cursor(2, 8)
+  feed("i<BS><Esc>")
+  eq(vim.api.nvim_buf_line_count(0), 1)
+  eq(vim.api.nvim_get_current_line(), "local x = 1return x")
+end)
+
+test("mapping joins upward when cursor is inside leading indentation", function()
+  reset({ "local x = 1", "            return x" })
+  set_cursor(2, 4)
+  feed("i<BS><Esc>")
+  eq(vim.api.nvim_buf_line_count(0), 1)
+  eq(vim.api.nvim_get_current_line(), "local x = 1return x")
+end)
+
+test("mapping joins upward with mixed tab indentation before text", function()
+  reset({ "local x = 1", "\t    return x" })
+  set_cursor(2, 3)
+  feed("i<BS><Esc>")
+  eq(vim.api.nvim_buf_line_count(0), 1)
+  eq(vim.api.nvim_get_current_line(), "local x = 1return x")
+end)
+
+test("mapping removes first-line indentation before text without changing text", function()
+  reset({ "            return x" })
+  set_cursor(1, 4)
+  feed("i<BS><Esc>")
+  eq(vim.api.nvim_buf_line_count(0), 1)
+  eq(vim.api.nvim_get_current_line(), "return x")
+end)
+
 test("mapping clears first whitespace-only line at insert end", function()
   reset({ "        " })
   set_cursor(1, 0)
@@ -196,6 +233,14 @@ test("mapping joins whitespace-only line upward", function()
   reset({ "if ok {", "        " })
   set_cursor(2, 0)
   feed("A<BS><Esc>")
+  eq(vim.api.nvim_buf_line_count(0), 1)
+  eq(vim.api.nvim_get_current_line(), "if ok {")
+end)
+
+test("mapping joins whitespace-only line upward from inside indentation", function()
+  reset({ "if ok {", "        " })
+  set_cursor(2, 4)
+  feed("i<BS><Esc>")
   eq(vim.api.nvim_buf_line_count(0), 1)
   eq(vim.api.nvim_get_current_line(), "if ok {")
 end)
@@ -216,11 +261,29 @@ test("mapping changes real buffer text natively for ordinary text", function()
   eq(vim.api.nvim_get_current_line(), "go")
 end)
 
+test("mapping keeps native behavior when cursor left side contains text", function()
+  reset({ "  hello" })
+  set_cursor(1, 7)
+  feed("a<BS><Esc>")
+  eq(vim.api.nvim_get_current_line(), "  hell")
+end)
+
 test("dot repeat keeps ordinary backspace in the insert redo sequence", function()
   reset({ "alpha beta" })
   set_cursor(1, 0)
   feed("ciwgpj<BS>t-5-mini<Esc>w.")
   eq(vim.api.nvim_get_current_line(), "gpt-5-mini gpt-5-mini")
+end)
+
+test("dot repeat replays smart indentation join", function()
+  reset({ "a", "    x", "b", "    y" })
+  set_cursor(2, 4)
+  feed("i<BS><Esc>")
+  eq(vim.api.nvim_buf_get_lines(0, 0, -1, false), { "ax", "b", "    y" })
+
+  set_cursor(3, 4)
+  feed(".")
+  eq(vim.api.nvim_buf_get_lines(0, 0, -1, false), { "ax", "by" })
 end)
 
 local failures = {}
