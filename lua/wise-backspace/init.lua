@@ -58,14 +58,6 @@ function M.setup(opts)
     expr = true,
     replace_keycodes = true,
   })
-
-  vim.keymap.set("c", "<BS>", function()
-    return "<BS>"
-  end, {
-    desc = "Wise Backspace",
-    expr = true,
-    replace_keycodes = true,
-  })
 end
 
 return M

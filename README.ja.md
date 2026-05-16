@@ -30,7 +30,7 @@ lazy.nvim の例:
 {
   "cotrin8672/wise-backspace.nvim",
   tag = "v1.0.4",
-  event = { "InsertEnter", "CmdlineEnter" },
+  event = "InsertEnter",
   opts = {
     ignored_filetypes = { "", "python", "haskell", "markdown", "text" },
   },
@@ -74,7 +74,7 @@ require("wise-backspace").setup({
 初回の insert mode / command-line entry で lazy-load する例:
 
 ```lua
-vim.api.nvim_create_autocmd({ "InsertEnter", "CmdlineEnter" }, {
+vim.api.nvim_create_autocmd("InsertEnter", {
   once = true,
   callback = function()
     require("wise-backspace").setup()

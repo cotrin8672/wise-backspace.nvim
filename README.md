@@ -30,7 +30,7 @@ With lazy.nvim:
 {
   "cotrin8672/wise-backspace.nvim",
   tag = "v1.0.4",
-  event = { "InsertEnter", "CmdlineEnter" },
+  event = "InsertEnter",
   opts = {
     ignored_filetypes = { "", "python", "haskell", "markdown", "text" },
   },
@@ -71,10 +71,10 @@ require("wise-backspace").setup({
 
 Currently, the built-in provider supports Lua blocks such as `if ... end`, `do ... end`, `while ... end`, `for ... end`, `repeat ... until`, and function blocks. Unsupported languages or missing parsers silently fall back to the default behavior.
 
-Lazy-loading on the first insert or command-line entry is supported:
+Lazy-loading on the first insert entry is supported:
 
 ```lua
-vim.api.nvim_create_autocmd({ "InsertEnter", "CmdlineEnter" }, {
+vim.api.nvim_create_autocmd("InsertEnter", {
   once = true,
   callback = function()
     require("wise-backspace").setup()

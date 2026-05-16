@@ -7,7 +7,9 @@
 ## Scope
 
 - Implement a small Lua plugin, not a dotfiles-only script.
-- Expose only one user option: `ignored_filetypes`.
+- Expose user options:
+  - `ignored_filetypes`
+  - `treesitter`
 - Use `vim.bo.filetype` for filetype checks.
 - Support simple matched pair deletion with returned key sequences.
 - Do not replace buffer text directly during Backspace. Return key sequences from an expression mapping.
@@ -35,6 +37,6 @@
 
 - Use headless Neovim tests as the source of truth.
 - Test expression return values and real buffer effects.
-- Cover ordinary text deletion, dot-repeat behavior, indentation reduction, indentation-sensitive joining, empty bracket block collapse, pair deletion, ignored filetypes, tabs in leading whitespace, setup idempotence, and command-line mapping installation.
+- Cover ordinary text deletion, dot-repeat behavior, indentation reduction, indentation-sensitive joining, empty bracket block collapse, pair deletion, ignored filetypes, tabs in leading whitespace, setup idempotence, and command-line mapping preservation.
 - Keep repeatable validation steps in the repository skill at `.codex/skills/wise-backspace-verify`.
 - Before final delivery, run that skill's `scripts/verify.ps1` workflow unless the environment blocks it.

@@ -20,7 +20,7 @@ local function leading_whitespace_width(line)
   local width = 0
   for char in leading_whitespace(line):gmatch(".") do
     if char == "\t" then
-      width = width + tabstop
+      width = width + (tabstop - (width % tabstop))
     else
       width = width + 1
     end
@@ -166,7 +166,8 @@ function M.backspace_keys(treesitter_opts)
     return collapse_empty_brackets(col, #current_line, next_line)
   end
 
-  if contains_only_whitespace(current_line) and treesitter.empty_block(treesitter_opts, row) then
+  local block_context = treesitter.block_context(treesitter_opts, row, prev_non_ws_row)
+  if contains_only_whitespace(current_line) and block_context.empty_block then
     return collapse_empty_keyword_block(col, #current_line, next_line)
   end
 
@@ -174,25 +175,24 @@ function M.backspace_keys(treesitter_opts)
   local previous_indent_width = leading_whitespace_width(prev_non_ws_line)
   local current_indent_width = leading_whitespace_width(current_line)
   local previous_ends_opening_pair = is_opening_pair(line_last_non_whitespace_char(prev_non_ws_line))
-  local previous_starts_keyword_block = treesitter.block_after_previous_line(treesitter_opts, row, prev_non_ws_row)
-  local keyword_block_ends_after_current_line = treesitter.block_ends_after_current_line(treesitter_opts, row, prev_non_ws_row)
+  local shiftwidth = vim.fn.shiftwidth()
 
   if previous_ends_opening_pair or current_line_starts_with_dot(current_line) then
-    local correct_indent = previous_indent .. string.rep(" ", vim.bo.shiftwidth)
-    local correct_width = previous_indent_width + vim.bo.shiftwidth
+    local correct_indent = previous_indent .. string.rep(" ", shiftwidth)
+    local correct_width = previous_indent_width + shiftwidth
     if current_indent_width > correct_width then
       return replace_leading(col, leading_len, correct_indent)
     end
     return join_after_removing_leading(col, leading_len)
   end
 
-  if previous_starts_keyword_block then
-    local correct_indent = previous_indent .. string.rep(" ", vim.bo.shiftwidth)
-    local correct_width = previous_indent_width + vim.bo.shiftwidth
+  if block_context.after_previous_line then
+    local correct_indent = previous_indent .. string.rep(" ", shiftwidth)
+    local correct_width = previous_indent_width + shiftwidth
     if current_indent_width > correct_width then
       return replace_leading(col, leading_len, correct_indent)
     end
-    if keyword_block_ends_after_current_line and not current_line_starts_with_lua_comment(current_line) then
+    if block_context.ends_after_current_line and not current_line_starts_with_lua_comment(current_line) then
       return collapse_keyword_block_line(col, leading_len, current_line, next_line)
     end
   end

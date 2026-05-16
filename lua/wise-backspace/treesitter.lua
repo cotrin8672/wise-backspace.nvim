@@ -12,6 +12,15 @@ local providers = {
       function_definition = true,
     },
   },
+  matlab = {
+    block_nodes = {
+      if_statement = true,
+      for_statement = true,
+      while_statement = true,
+      function_definition = true,
+      switch_statement = true,
+    },
+  },
 }
 
 local function contains(list, value)
@@ -33,7 +42,8 @@ local function parser_for(opts)
     return nil
   end
 
-  local lang = language_api.get_lang(vim.bo.filetype)
+  local filetype = vim.bo.filetype
+  local lang = language_api.get_lang(filetype) or filetype
   if not lang or not providers[lang] or not contains(opts.languages, lang) then
     return nil
   end
@@ -54,69 +64,65 @@ local function parse(parser)
   return trees
 end
 
-local function find_block(node, provider, predicate)
+local function inspect_block_context(node, provider, context)
   if not node then
-    return nil
+    return
   end
 
-  local found
-  if provider.block_nodes[node:type()] and predicate(node) then
-    found = node
-  end
-
-  for index = 0, node:child_count() - 1 do
-    local child = find_block(node:child(index), provider, predicate)
-    if child then
-      found = child
+  if provider.block_nodes[node:type()] then
+    local start_row, _, end_row = node:range()
+    if start_row == context.previous_zero and start_row < context.current_zero and context.current_zero <= end_row then
+      context.after_previous_line = true
+    end
+    if start_row == context.previous_zero and end_row == context.current_zero + 1 then
+      context.ends_after_current_line = true
+    end
+    if context.current_zero == start_row + 1 and end_row == start_row + 2 then
+      context.empty_block = true
     end
   end
 
-  return found
+  for index = 0, node:child_count() - 1 do
+    inspect_block_context(node:child(index), provider, context)
+  end
 end
 
-local function find_supported_block(opts, predicate)
+function M.block_context(opts, current_row, previous_row)
+  local context = {
+    current_zero = current_row - 1,
+    previous_zero = previous_row and previous_row - 1 or -1,
+    after_previous_line = false,
+    ends_after_current_line = false,
+    empty_block = false,
+  }
+
   local parser, provider = parser_for(opts)
   if not parser then
-    return nil
+    return context
   end
 
   local trees = parse(parser)
   if not trees then
-    return nil
+    return context
   end
 
   for _, tree in ipairs(trees) do
-    local block = find_block(tree:root(), provider, predicate)
-    if block then
-      return block
-    end
+    inspect_block_context(tree:root(), provider, context)
   end
+
+  return context
 end
 
 function M.block_after_previous_line(opts, current_row, previous_row)
-  return find_supported_block(opts, function(node)
-    local start_row, _, end_row = node:range()
-    local current_zero = current_row - 1
-    local previous_zero = previous_row - 1
-    return start_row == previous_zero and start_row < current_zero and current_zero <= end_row
-  end) ~= nil
+  return M.block_context(opts, current_row, previous_row).after_previous_line
 end
 
 function M.block_ends_after_current_line(opts, current_row, previous_row)
-  return find_supported_block(opts, function(node)
-    local start_row, _, end_row = node:range()
-    local current_zero = current_row - 1
-    local previous_zero = previous_row - 1
-    return start_row == previous_zero and end_row == current_zero + 1
-  end) ~= nil
+  return M.block_context(opts, current_row, previous_row).ends_after_current_line
 end
 
 function M.empty_block(opts, current_row)
-  return find_supported_block(opts, function(node)
-    local start_row, _, end_row = node:range()
-    local current_zero = current_row - 1
-    return current_zero == start_row + 1 and end_row == start_row + 2
-  end) ~= nil
+  return M.block_context(opts, current_row).empty_block
 end
 
 return M

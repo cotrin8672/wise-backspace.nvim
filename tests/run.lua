@@ -86,15 +86,24 @@ local function lines()
   return vim.api.nvim_buf_get_lines(0, 0, -1, false)
 end
 
-test("insert and cmdline mappings are installed as expr mappings", function()
+local function has_treesitter_block_context(filetype, source)
+  reset(source)
+  vim.bo.filetype = filetype
+  local opts = { enabled = true, languages = { filetype } }
+  setup({ treesitter = opts })
+  return require("wise-backspace.treesitter").block_context(opts, 2, 1).after_previous_line
+end
+
+test("insert mapping is installed as expr mapping and cmdline mapping is preserved", function()
+  vim.keymap.set("c", "<BS>", "<Nop>", { desc = "Existing Backspace" })
   reset()
   local insert = vim.fn.maparg("<BS>", "i", false, true)
   local cmdline = vim.fn.maparg("<BS>", "c", false, true)
 
   eq(insert.expr, 1)
   eq(insert.desc, "Wise Backspace")
-  eq(cmdline.expr, 1)
-  eq(cmdline.desc, "Wise Backspace")
+  eq(cmdline.expr, 0)
+  eq(cmdline.desc, "Existing Backspace")
 end)
 
 test("setup is idempotent and replaces ignored filetypes", function()
@@ -151,6 +160,15 @@ test("tabs and spaces are both indentation", function()
   eq(lines(), { "value" })
 end)
 
+test("tabs use display width from the current column", function()
+  reset({ "        root", " \tvalue" })
+  set_cursor(2, 2)
+  eq(wise.backspace(), join_after_removing_leading(2, 2))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "        rootvalue" })
+end)
+
 test("over-indented line under normal code unindents to previous non-empty line", function()
   reset({ "root", "        value" })
   set_cursor(2, 8)
@@ -192,6 +210,17 @@ test("opening pair overindent returns to one shiftwidth deeper", function()
 
   feed("i<BS><Esc>")
   eq(lines(), { "if ok {", "    value" })
+end)
+
+test("opening pair uses effective shiftwidth when shiftwidth is zero", function()
+  reset({ "if ok {", "    value" })
+  vim.bo.shiftwidth = 0
+  vim.bo.tabstop = 2
+  set_cursor(2, 4)
+  eq(wise.backspace(), replace_leading(4, 4, "  "))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "if ok {", "  value" })
 end)
 
 test("opening pair correct indent joins upward", function()
@@ -322,6 +351,18 @@ test("treesitter enabled unindents lua keyword block overindent to one shiftwidt
   eq(lines(), { "if ok then", "    value", "end" })
 end, { variants = false })
 
+test("treesitter enabled uses effective shiftwidth when shiftwidth is zero", function()
+  current_treesitter_enabled = true
+  reset({ "if ok then", "    value", "end" })
+  vim.bo.shiftwidth = 0
+  vim.bo.tabstop = 2
+  set_cursor(2, 4)
+  eq(wise.backspace(), replace_leading(4, 4, "  "))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "if ok then", "  value", "end" })
+end, { variants = false })
+
 test("treesitter enabled collapses lua keyword block line at correct indent", function()
   current_treesitter_enabled = true
   reset({ "if ok then", "    value", "end" })
@@ -444,6 +485,81 @@ test("treesitter configured languages fall back when lua is not enabled", functi
   setup({ treesitter = { enabled = true, languages = { "query" } } })
   set_cursor(2, 8)
   eq(wise.backspace(), replace_leading(8, 8, ""))
+end, { variants = false })
+
+test("treesitter matlab support requires explicit language opt-in", function()
+  current_treesitter_enabled = true
+  reset({ "if ok", "        value", "end" })
+  vim.bo.filetype = "matlab"
+  set_cursor(2, 8)
+  eq(wise.backspace(), replace_leading(8, 8, ""))
+end, { variants = false })
+
+test("treesitter enabled unindents matlab keyword block overindent", function()
+  if not has_treesitter_block_context("matlab", { "if ok", "        value", "end" }) then
+    return
+  end
+
+  current_treesitter_enabled = false
+  reset({ "if ok", "        value", "end" })
+  vim.bo.filetype = "matlab"
+  setup({ treesitter = { enabled = true, languages = { "matlab" } } })
+  set_cursor(2, 8)
+  eq(wise.backspace(), replace_leading(8, 8, "    "))
+
+  feed("i<BS><Esc>")
+  eq(lines(), { "if ok", "    value", "end" })
+end, { variants = false })
+
+test("treesitter enabled collapses matlab keyword block line at correct indent", function()
+  if not has_treesitter_block_context("matlab", { "if ok", "    value", "end" }) then
+    return
+  end
+
+  current_treesitter_enabled = false
+  reset({ "if ok", "    value", "end" })
+  vim.bo.filetype = "matlab"
+  setup({ treesitter = { enabled = true, languages = { "matlab" } } })
+  set_cursor(2, 4)
+  feed("i<BS><Esc>")
+  eq(lines(), { "if ok value end" })
+end, { variants = false })
+
+test("treesitter enabled collapses empty matlab block", function()
+  if not has_treesitter_block_context("matlab", { "if ok", "    ", "end" }) then
+    return
+  end
+
+  current_treesitter_enabled = false
+  reset({ "if ok", "    ", "end" })
+  vim.bo.filetype = "matlab"
+  setup({ treesitter = { enabled = true, languages = { "matlab" } } })
+  set_cursor(2, 4)
+  feed("i<BS><Esc>")
+  eq(lines(), { "if ok end" })
+end, { variants = false })
+
+test("treesitter enabled handles other supported matlab block forms", function()
+  if not has_treesitter_block_context("matlab", { "if ok", "        value", "end" }) then
+    return
+  end
+
+  local cases = {
+    { { "for i = 1:n", "        value", "end" }, { "for i = 1:n", "    value", "end" } },
+    { { "while ok", "        value", "end" }, { "while ok", "    value", "end" } },
+    { { "function y = f(x)", "        y = x", "end" }, { "function y = f(x)", "    y = x", "end" } },
+    { { "switch x", "        y = 1", "end" }, { "switch x", "    y = 1", "end" } },
+  }
+
+  current_treesitter_enabled = false
+  for _, case in ipairs(cases) do
+    reset(case[1])
+    vim.bo.filetype = "matlab"
+    setup({ treesitter = { enabled = true, languages = { "matlab" } } })
+    set_cursor(2, 8)
+    feed("i<BS><Esc>")
+    eq(lines(), case[2])
+  end
 end, { variants = false })
 
 local failures = {}
